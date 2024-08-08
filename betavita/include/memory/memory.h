@@ -23,6 +23,10 @@ struct MemoryMap {
 void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t protection);
 void unmap_memory(uint32_t start, uint32_t end);
 void unmap_memory_all();
+
+void map_memory_from_api(uint32_t start, uint32_t end, void *ptr, uint8_t protection);
+void unmap_memory_from_api(uint32_t start, uint32_t end);
+
 std::vector<MemoryMap>& get_memory_map_list();
 void *get_pointer_unchecked(uint32_t address);
 void *get_pointer(uint32_t address);

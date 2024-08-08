@@ -22,16 +22,22 @@ void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t p
     map.protection = (ProtectionType) protection;
     memory_map_list.push_back(map);
 
+    map_memory_from_api(start, end, map.fast_access, map.protection);
+
     LOG_INFO(MEMORY, "Mapped memory %s 0x%08X ... 0x%08X size 0x%08X protection flags 0x%01x", name.c_str(), map.start, map.end, map.size, protection);
 }
 
 void unmap_memory(uint32_t start, uint32_t end) {
-
+    unmap_memory_from_api(start, end);
 }
 
 void unmap_memory_all() {
-    LOG_INFO(MEMORY, "Unmapped all memory regions");
+    for (auto& i : memory_map_list) {
+        unmap_memory(i.start, i.end);
+    }
+
     memory_map_list.clear();
+    LOG_INFO(MEMORY, "Unmapped all memory regions");
 }
 
 std::vector<MemoryMap>& get_memory_map_list() {

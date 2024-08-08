@@ -206,89 +206,89 @@ enum ArmRelocType {
     R_ARM_RBASE = 255
 };
 
+bool apply_one_relocation(uint8_t relocation_type, uint32_t S, uint32_t A, uint32_t P) {
+    void *data = memory::get_pointer_unchecked(P);
+    const uint32_t displacement = A - P + S;
+
+    if (!data) {
+        LOG_ERROR(SELFLOADER, "invalid relocation patch address 0x%08x", P);
+        return false;
+    }
+
+    switch (relocation_type) {
+    case R_ARM_ABS32:
+    case R_ARM_TARGET1:
+        *(uint32_t *) data = S + A;
+        break;
+    case R_ARM_PREL31:
+        *(uint32_t *) data = displacement & 0x7FFFFFFF;
+        break;
+    case R_ARM_THM_CALL:
+    {
+        struct Upper {
+            uint16_t imm10 : 10;
+            uint16_t sign : 1;
+            uint16_t ignored : 5;
+        };
+
+        struct Lower {
+            uint16_t imm11 : 11;
+            uint16_t j2 : 1;
+            uint16_t unknown : 1;
+            uint16_t j1 : 1;
+            uint16_t unknown2 : 2;
+        };
+
+        struct Pair {
+            Upper upper;
+            Lower lower;
+        };
+
+        Pair *pair = (Pair *)(data);
+        pair->lower.imm11 = displacement >> 1;
+        pair->upper.imm10 = displacement >> 12;
+        pair->upper.sign = displacement >> 24;
+        pair->lower.j2 = pair->upper.sign ^ ((~displacement) >> 22);
+        pair->lower.j1 = pair->upper.sign ^ ((~displacement) >> 23);
+        break;
+    }
+    case R_ARM_THM_MOVW_ABS_NC:
+    {
+        uint32_t opcode = *(uint32_t *) data;
+
+        uint32_t target = (S + A);
+        int imm8 = target & 0xFF;
+        int imm3 = (target >> 8)  & 0x7;
+        int imm1 = (target >> 11) & 0x1;
+        int imm4 = (target >> 12) & 0xF;
+
+        opcode &= 0x8F00FBF0;
+        opcode |= (imm8 << 16) | (imm3 << 28) | (imm1 << 10) | imm4;
+        *(uint32_t *) data = opcode;
+        break;
+    }
+    case R_ARM_THM_MOVT_ABS:
+    {
+        uint32_t opcode = *(uint32_t *) data;
+        uint32_t target = (S + A);
+        int imm8 = (target >> 16) & 0xFF;
+        int imm3 = (target >> 24)  & 0x7;
+        int imm1 = (target >> 27) & 0x1;
+        int imm4 = (target >> 28) & 0xF;			
+        opcode &= 0x8F00FBF0;
+        opcode |= (imm8 << 16) | (imm3 << 28) | (imm1 << 10) | imm4;
+        *(uint32_t *) data = opcode;
+        break;
+    }
+    default:
+        LOG_ERROR(SELFLOADER, "Unimplemented relocation type %d", relocation_type);
+        return false;
+    }
+    return true;
+}
+
 static bool do_self_relocation_program_data(const std::shared_ptr<SELFProgramData>& _data) {
     SELFProgramData *data = _data.get();
-
-    auto apply_one_relocation = [&](uint8_t relocation_type, uint32_t S, uint32_t A, uint32_t P) -> bool {
-        void *data = memory::get_pointer_unchecked(P);
-        const uint32_t displacement = A - P + S;
-
-        if (!data) {
-            LOG_ERROR(SELFLOADER, "invalid relocation patch address 0x%08x", P);
-            return false;
-        }
-
-        switch (relocation_type) {
-        case R_ARM_ABS32:
-        case R_ARM_TARGET1:
-            *(uint32_t *) data = S + A;
-            break;
-        case R_ARM_PREL31:
-            *(uint32_t *) data = displacement & 0x7FFFFFFF;
-            break;
-        case R_ARM_THM_CALL:
-        {
-            struct Upper {
-                uint16_t imm10 : 10;
-                uint16_t sign : 1;
-                uint16_t ignored : 5;
-            };
-
-            struct Lower {
-                uint16_t imm11 : 11;
-                uint16_t j2 : 1;
-                uint16_t unknown : 1;
-                uint16_t j1 : 1;
-                uint16_t unknown2 : 2;
-            };
-
-            struct Pair {
-                Upper upper;
-                Lower lower;
-            };
-
-            Pair *pair = (Pair *)(data);
-            pair->lower.imm11 = displacement >> 1;
-            pair->upper.imm10 = displacement >> 12;
-            pair->upper.sign = displacement >> 24;
-            pair->lower.j2 = pair->upper.sign ^ ((~displacement) >> 22);
-            pair->lower.j1 = pair->upper.sign ^ ((~displacement) >> 23);
-            break;
-        }
-        case R_ARM_THM_MOVW_ABS_NC:
-        {
-            uint32_t opcode = *(uint32_t *) data;
-
-            uint32_t target = (S + A);
-            int imm8 = target & 0xFF;
-            int imm3 = (target >> 8)  & 0x7;
-            int imm1 = (target >> 11) & 0x1;
-            int imm4 = (target >> 12) & 0xF;
-
-            opcode &= 0x8F00FBF0;
-            opcode |= (imm8 << 16) | (imm3 << 28) | (imm1 << 10) | imm4;
-            *(uint32_t *) data = opcode;
-            break;
-        }
-        case R_ARM_THM_MOVT_ABS:
-        {
-            uint32_t opcode = *(uint32_t *) data;
-            uint32_t target = (S + A);
-            int imm8 = (target >> 16) & 0xFF;
-            int imm3 = (target >> 24)  & 0x7;
-            int imm1 = (target >> 27) & 0x1;
-            int imm4 = (target >> 28) & 0xF;			
-            opcode &= 0x8F00FBF0;
-            opcode |= (imm8 << 16) | (imm3 << 28) | (imm1 << 10) | imm4;
-            *(uint32_t *) data = opcode;
-            break;
-        }
-        default:
-            LOG_ERROR(SELFLOADER, "Unimplemented relocation type %d", relocation_type);
-            return false;
-        }
-        return true;
-    };
 
     uint32_t g_addr = 0, g_offset = 0, g_patchseg = 0,
         g_saddr = 0, g_addend = 0, g_type = 0, g_type2 = 0;
@@ -372,21 +372,18 @@ static bool do_self_relocation_program_data(const std::shared_ptr<SELFProgramDat
     return true;
 }
 
-static __attribute__((unused)) bool relocate_imports_exports(const std::shared_ptr<SELFProgramData>& data, const sce_module_info_raw *modinfo) {
-    return false;
-}
-
-static void patch_function_import_data(uint32_t *data) {
-    uint32_t patch_data[2] = {
+static void patch_function_import_data(uint32_t *data, uint32_t nid) {
+    uint32_t patch_data[3] = {
         0xEF000000,
-        0xE12FFF1E,
+        0xe1A0F00E,
+        nid,
     };
 
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < sizeof patch_data / sizeof *patch_data; i++)
         *(data + i) = patch_data[i];
 }
 
-static bool add_runtime_library_functions(const sce_module_info_raw *modinfo, uint32_t base_address = 0) {
+static bool add_module_imports(const sce_module_info_raw *modinfo, uint32_t base_address = 0) {
     hle::RuntimeModule mod;
 
     uint32_t import_start_addr, import_end_addr;
@@ -405,8 +402,8 @@ static bool add_runtime_library_functions(const sce_module_info_raw *modinfo, ui
             return false;
         }
 
-        uint32_t library_name_addr, library_nid, func_nid_table, func_entry_table;
-        int num_funcs;
+        uint32_t library_name_addr, library_nid, func_nid_table, func_entry_table, var_nid_table, var_entry_table;
+        int num_funcs, num_vars;
 
         import_struct_size = import->size;
         if (import_struct_size == 0x24) {
@@ -415,50 +412,79 @@ static bool add_runtime_library_functions(const sce_module_info_raw *modinfo, ui
             return false;
         } else if (import_struct_size == 0x34) {
             num_funcs = import->num_syms_funcs;
+            num_vars = import->num_syms_vars;
             library_name_addr = import->library_name;
             library_nid = import->library_nid;
             func_nid_table = import->func_nid_table;
             func_entry_table = import->func_entry_table;
+            var_nid_table = import->var_nid_table;
+            var_entry_table = import->var_entry_table;
         } else {
             LOG_ERROR(SELFLOADER, "unimplemented struct size 0x%04x for sce_module_import*", import_struct_size);
             return false;
         }
 
         uint32_t *nid = (uint32_t *) memory::get_pointer_unchecked(func_nid_table);
-
         if (!nid) {
             LOG_ERROR(SELFLOADER, "unknown address for function nid table 0x%08x", func_nid_table);
             return false;
         }
 
         uint32_t *entry_addr = (uint32_t *) memory::get_pointer_unchecked(func_entry_table);
-
         if (!entry_addr) {
             LOG_ERROR(SELFLOADER, "unknown address for function nid table 0x%08x", func_entry_table);
             return false;
         }
 
         library.library_nid = library_nid;
-        library.library_name = (const char *) memory::get_pointer(library_name_addr);
+        library.library_name = (const char *) memory::get_pointer_unchecked(library_name_addr);
 
-        for (int i = 0; i < num_funcs; i++) {
+        for (int i = 0; i < num_funcs; i++, nid++, entry_addr++) {
             hle::FunctionImport function_import {};
-            uint32_t *entry_data = (uint32_t *) memory::get_pointer(*entry_addr);
+            uint32_t *entry_data = (uint32_t *) memory::get_pointer_unchecked(*entry_addr);
 
             if (!entry_data) {
                 LOG_ERROR(SELFLOADER, "can't patch out entry address 0x%08x", *entry_addr);
                 return false;
             }
 
-            patch_function_import_data(entry_data);
+            patch_function_import_data(entry_data, *nid);
 
             function_import.nid = *nid;
             function_import.entry_address = *entry_addr;
-            nid++;
-            entry_addr++;
             library.function_imports.push_back(function_import);
         }
 
+        if (var_nid_table != 0 && var_entry_table != 0) {
+            nid = (uint32_t *) memory::get_pointer_unchecked(var_nid_table);
+            if (!nid) {
+                LOG_ERROR(SELFLOADER, "unknown address for variable nid table 0x%08x", var_nid_table);
+                return false;
+            }
+
+            entry_addr = (uint32_t *) memory::get_pointer_unchecked(var_entry_table);
+            if (!entry_addr) {
+                LOG_ERROR(SELFLOADER, "unknown address for variable nid table 0x%08x", var_entry_table);
+                return false;
+            }
+
+            for (int i = 0; i < num_vars; i++, nid++, entry_addr++) {
+                auto *data = (uint32_t *) memory::get_pointer_unchecked(*entry_addr);
+
+                if (!data) {
+                    LOG_ERROR(SELFLOADER, "Unknown variable import entry address 0x%08x", *entry_addr);
+                    return false;
+                }
+
+                uint32_t relocation_data_size = (*data >> 4) & 0xFFFFFF;
+                void *relocation_entry = (void *)(data + 1);
+                if (relocation_data_size) {
+                    printf("Variable imports unimplemented size 0x%08x host relocation entry %p!\n", relocation_data_size, relocation_entry);
+                    return false;
+                }
+            }
+        } else
+            LOG_DEBUG(SELFLOADER, "Variable table not found!");
         mod.function_import_libraries.push_back(library);
         import_start_addr += import_struct_size;
     }
@@ -467,6 +493,82 @@ static bool add_runtime_library_functions(const sce_module_info_raw *modinfo, ui
     mod.module_nid = modinfo->module_nid;
     hle::add_runtime_module(mod);
     LOG_DEBUG(SELFLOADER, "Added runtime library functions to HLE");
+    return true;
+}
+
+static bool add_module_exports(const sce_module_info_raw *modinfo, uint32_t base_address = 0) {
+    uint32_t export_start_addr, export_end_addr;
+
+    export_start_addr = modinfo->export_top;
+    export_end_addr = modinfo->export_end;
+
+    uint32_t module_start = 0, module_stop = 0, module_exit = 0;
+    uint32_t tls_start_addr, tls_filesz, tls_memsz;
+
+    tls_start_addr = modinfo->tls_start;
+    tls_filesz = modinfo->tls_filesz;
+    tls_memsz = modinfo->tls_memsz;
+
+    (void) tls_start_addr, (void) tls_filesz, (void) tls_memsz;
+
+    while (export_start_addr < export_end_addr) {
+        uint32_t export_address = base_address + export_start_addr;
+        auto export_lib = (sce_module_exports_raw *) memory::get_pointer_unchecked(export_address);
+
+        int offset = 0;
+        auto *nid_table = (uint32_t *) memory::get_pointer_unchecked(export_lib->nid_table);
+        auto *entry_table = (uint32_t *) memory::get_pointer_unchecked(export_lib->entry_table);
+
+        for (int i = 0; i < export_lib->num_syms_funcs; i++, offset++) {
+            uint32_t func_nid = nid_table[offset];
+            uint32_t func_entry = entry_table[offset];
+
+            switch (func_nid) {
+            case NID_MODULE_START:
+                module_start = func_entry;
+                break;
+            case NID_MODULE_STOP:
+                module_stop = func_entry;
+                break;
+            case NID_MODULE_EXIT:
+                module_exit = func_entry;
+                break;
+            default:
+                LOG_ERROR(SELFLOADER, "unresolved export function NID 0x%08X entry 0x%08X", func_nid, func_entry);
+                return false;
+            }
+        }
+  
+        for (int i = 0; i < export_lib->num_syms_vars; i++, offset++) {
+            uint32_t var_nid = nid_table[offset];
+            uint32_t var_entry = entry_table[offset];
+
+            switch (var_nid) {
+            case NID_PROCESS_PARAM:
+                
+                break;
+            case NID_MODULE_INFO: break;
+            default:
+                LOG_ERROR(SELFLOADER, "unresolved export variable NID 0x%08X entry 0x%08X", var_nid, var_entry);
+                return false;
+            }
+        }
+
+        for (int i = 0; i < export_lib->num_syms_tls_vars; i++, offset++) {
+            uint32_t tls_var_nid = nid_table[offset];
+            uint32_t tls_var_entry = entry_table[offset];
+
+            switch (tls_var_nid) {
+            default:
+                LOG_ERROR(SELFLOADER, "unresolved export TLS variable NID 0x%08X entry 0x%08X", tls_var_nid, tls_var_entry);
+                return false;
+            }
+        }
+
+        export_start_addr += export_lib->size;
+    }
+    
+    (void) module_start, (void) module_stop, (void) module_exit;
     return true;
 }
 
@@ -512,10 +614,15 @@ bool load_self_to_memory(const std::shared_ptr<SELFProgramData>& _data) {
     if (data->relocatable) {
         int segment = data->entry >> 30;
         int offset = data->entry & 0x3FFFFFFF;
-        modinfo = (sce_module_info_raw *) memory::get_pointer(data->segments[segment].phdr.p_vaddr + offset);
+        modinfo = (sce_module_info_raw *) memory::get_pointer_unchecked(data->segments[segment].phdr.p_vaddr + offset);
     } else {
         modinfo = nullptr;
         LOG_ERROR(SELFLOADER, "Unimplemented %s ET_SCE_EXEC", __func__);
+        return false;
+    }
+
+    if (!modinfo) {
+        LOG_ERROR(SELFLOADER, "sce_module_info not found!");
         return false;
     }
 
@@ -528,7 +635,17 @@ bool load_self_to_memory(const std::shared_ptr<SELFProgramData>& _data) {
         return false;
     }
 
-    add_runtime_library_functions(modinfo, data->relocatable ? bottom_address : 0);
+    self_relocated = add_module_imports(modinfo, data->relocatable ? bottom_address : 0);
+    if (!self_relocated) {
+        LOG_ERROR(SELFLOADER, "Can't load module imports");
+        return false;
+    }
+
+    self_relocated = add_module_exports(modinfo, data->relocatable ? bottom_address : 0);
+    if (!self_relocated) {
+        LOG_ERROR(SELFLOADER, "Can't load module exports");
+        return false;
+    }
     return true;
 }
 }

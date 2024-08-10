@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 
+#include <hle/vitatypes.h>
+
 namespace betavita::hle {
 struct HLEFunction;
 

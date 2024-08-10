@@ -33,6 +33,11 @@ inline void wrap() {
 
     processor::write_register_from_api(0, 0, retval);
 }
+
+template<int f(uint32_t name_ptr, uint32_t entry, int initPriority, uint32_t stackSize, uint32_t attr, int cpuAffinityMask, uint32_t option)>
+inline void wrap() {
+    printf("UNIMPLEMENTED WRAP!\n");
+}
 }
 
 #define WRAP_FUNCTION(x) ((void *) wrap<x>)

@@ -545,7 +545,7 @@ static bool add_module_exports(const sce_module_info_raw *modinfo, uint32_t base
 
             switch (var_nid) {
             case NID_PROCESS_PARAM:
-                
+                LOG_INFO(SELFLOADER, "Can't take process param variable yet");
                 break;
             case NID_MODULE_INFO: break;
             default:
@@ -598,7 +598,7 @@ bool load_self_to_memory(const std::shared_ptr<SELFProgramData>& _data) {
                 protection_flags |= memory::PROTECTION_TYPE_EXECUTE;
 
             if (!i.relocatable) {
-                uint32_t page_aligned_top_address_end = ((i.phdr.p_vaddr + i.phdr.p_memsz + 0x3FFF) & ~0x3FFF) - 1;
+                uint32_t page_aligned_top_address_end = ((i.phdr.p_vaddr + i.phdr.p_memsz + 0xFFF) & ~0xFFF) - 1;
                 if (bottom_address > i.phdr.p_vaddr)
                     bottom_address = i.phdr.p_vaddr;
                 if (top_address < page_aligned_top_address_end)

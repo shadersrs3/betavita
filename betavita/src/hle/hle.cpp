@@ -69,7 +69,18 @@ HLEFunction *get_function_from_module_list(const std::string& function_name) {
 }
 
 void init_modules() {
+    // SceSysmem modules
+
+    // User modules
     module_list.push_back(get_module_SceSysmem());
+
+    // Kernel modules
+
+    // SceLibKernel modules
+
+    // User modules
     module_list.push_back(get_module_SceLibKernel());
+
+    // Kernel modules
 }
 }

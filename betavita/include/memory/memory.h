@@ -20,7 +20,7 @@ struct MemoryMap {
     uint8_t *fast_access;
 };
 
-void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t protection);
+void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t protection, MemoryMap **memory_map = nullptr);
 void unmap_memory(uint32_t start, uint32_t end);
 void unmap_memory_all();
 

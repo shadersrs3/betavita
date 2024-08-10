@@ -40,6 +40,7 @@ public:
 
 uint32_t read_register_from_api(int core_num, int regnum);
 void write_register_from_api(int core_num, int regnum, uint32_t value);
+void stop_cpu_from_api();
 
 #pragma pack(pop)
 }

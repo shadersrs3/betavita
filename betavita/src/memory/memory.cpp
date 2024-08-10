@@ -1,5 +1,6 @@
 #include <cstring>
 #include <vector>
+#include <algorithm>
 
 #include <memory/memory.h>
 
@@ -8,7 +9,7 @@
 namespace betavita::memory {
 static std::vector<MemoryMap> memory_map_list;
 
-void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t protection) {
+void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t protection, MemoryMap **memory_map) {
     MemoryMap map;
     map.name = name;
     map.start = start;
@@ -20,10 +21,15 @@ void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t p
     map.data = std::move(data);
     map.fast_access = map.data.get();
     map.protection = (ProtectionType) protection;
+
     memory_map_list.push_back(map);
 
-    map_memory_from_api(start, end, map.fast_access, map.protection);
+    if (memory_map)
+        *memory_map = &memory_map_list.back();
 
+    std::sort(memory_map_list.begin(), memory_map_list.end(), [](const MemoryMap &a, const MemoryMap& b) { return a.end < b.end; });
+
+    map_memory_from_api(start, end, map.fast_access, map.protection);
     LOG_INFO(MEMORY, "Mapped memory %s 0x%08X ... 0x%08X size 0x%08X protection flags 0x%01x", name.c_str(), map.start, map.end, map.size, protection);
 }
 

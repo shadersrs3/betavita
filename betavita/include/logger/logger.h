@@ -27,6 +27,6 @@ public:
     void log_debug(const char *filename, const char *function, int line, const char *fmt, ...);
 };
 
-extern Logger SELFLOADER, HLE, MEMORY;
+extern Logger SELFLOADER, HLE, MEMORY, KERNEL;
 
 #endif /* _BETAVITA_LOGGER_H */

@@ -483,8 +483,8 @@ static bool add_module_imports(const sce_module_info_raw *modinfo, uint32_t base
                     return false;
                 }
             }
-        } else
-            LOG_DEBUG(SELFLOADER, "Variable table not found!");
+        }
+
         mod.function_import_libraries.push_back(library);
         import_start_addr += import_struct_size;
     }

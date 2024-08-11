@@ -1,16 +1,13 @@
 #include <cstdio>
-#include <cstdint>
-#include <vector>
 #include <string>
 #include <cstring>
-#include <sstream>
-#include <iomanip>
-#include <memory>
 #include <unordered_map>
+#include <algorithm>
 
 #include <loader/self_loader.h>
 #include <hle/hle.h>
 #include <hle/kernel.h>
+#include <hle/memory_manager.h>
 #include <memory/memory.h>
 
 #include <logger/logger.h>
@@ -70,8 +67,24 @@ void write_register_from_api(int core_num, int regnum, uint32_t value) {
     }
 }
 
-void stop_cpu_from_api() {
+void stop_cpu_from_api(int core_num) {
     uc_emu_stop(engine);
+}
+
+int get_available_core() {
+    return 0;
+}
+
+void run_cpu_for(int core_num, RegisterContext *context, uint64_t instructions_count) {
+    int core = get_available_core();
+
+    (void) core;
+
+    bool thumb = (context->cpsr & 0x20) != 0;
+    uint32_t pc = context->reg[15] | thumb;
+
+    uc_err err = uc_emu_start(engine, pc, -1, -1, -1);
+    printf("%s\n", uc_strerror(err));
 }
 }
 
@@ -105,6 +118,27 @@ void unmap_memory_from_api(uint32_t start, uint32_t end) {
         uc_mem_unmap(engine, start, (end - start) + 1);
     }
 }
+
+void change_protection_from_api(uint32_t start, uint32_t end, uint8_t protection) {
+    uint32_t perms = 0;
+    for (int x = 0; x < 3; x++) {
+        switch (protection & (1 << x)) {
+        case memory::PROTECTION_TYPE_EXECUTE:
+            perms |= UC_PROT_EXEC;
+            break;
+        case memory::PROTECTION_TYPE_READ:
+            perms |= UC_PROT_READ;
+            break;
+        case memory::PROTECTION_TYPE_WRITE:
+            perms |= UC_PROT_WRITE;
+            break;
+        }
+    }
+
+    if (engine) {
+        uc_mem_protect(engine, start, (end - start) + 1, perms);
+    }
+}
 }
 
 bool invalid_read_access_hook(uc_engine *uc, uc_mem_type type, uint64_t address, int size, int64_t value, void *user_data) {
@@ -117,9 +151,19 @@ bool invalid_write_access_hook(uc_engine *uc, uc_mem_type type, uint64_t address
     return false;
 }
 
-static void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
-    // printf(">>> Tracing instruction at 0x%" PRIx64 ", instruction size = 0x%x\n", address, size);
+uint32_t address[2];
+void hook_code(uc_engine *uc, uint64_t address, uint32_t size, void *user_data) {
+    ::address[0] = ::address[1];
+    ::address[1] = address;
+
+    uint32_t data = *(uint32_t *) memory::get_pointer((uint32_t) address);
+
+    (void) data;
+
+    // printf(">>> Tracing instruction at 0x%" PRIx64 ", instruction size = 0x%x (0x%08x)\n", address, size, data);
 }
+
+#include <unordered_map>
 
 void handle_svc(uc_engine *uc, uint32_t intno, void *user_data) {
     uint32_t pc, svc_address;
@@ -130,7 +174,7 @@ void handle_svc(uc_engine *uc, uint32_t intno, void *user_data) {
     auto *svc = hle::get_function_from_address(svc_address);
 
     if (!svc || !svc->function) {
-        printf("Unknown SVC for address 0x%08X ", svc_address);
+        printf("Unknown SVC for address 0x%08X (call 0x%08x) ", svc_address, address[0]);
 
         if (svc) {
             printf("NID 0x%08X library name %s", svc->nid, svc->library_name.c_str());
@@ -142,71 +186,19 @@ void handle_svc(uc_engine *uc, uint32_t intno, void *user_data) {
         return;
     }
 
+    hle::kernel()->lock_core_svc();
+    hle::kernel()->set_core(0);
     svc->function->func_wrapper();
-}
-
-namespace betavita::hle {
-
-struct MemoryBlock {
-    uint32_t address;
-    int size;
-    bool is_free;
-};
-
-std::vector<MemoryBlock> allocated_memory_blocks;
-std::vector<MemoryBlock> free_memory_blocks;
-
-static std::pair<uint32_t, uint32_t> more_memory(uint32_t size) {
-    auto memlist = memory::get_memory_map_list();
-    uint32_t top_address = 0x0, memory_size = (size + 0x1000) & ~0xFFF;
-
-    for (auto it = memlist.begin(); it != memlist.end(); it++) {
-        memory::MemoryMap *start_map = &*it, *end_map;
-
-        if (top_address < start_map->end) {
-            top_address = (start_map->end + 1 + 0x1000) & ~0xFFF;
-        }
-
-        end_map = it + 1 != memlist.end() ? &*(it + 1) : nullptr;
-
-        if (end_map) {
-            uint32_t new_paged_addr = (start_map->end + 1 + 0x1000) & ~0xFFF;
-            int empty_paged_block = (end_map->start - 0x1000) - new_paged_addr - memory_size;
-            if (empty_paged_block >= 0) { // a gap is available
-                top_address = new_paged_addr;
-                break;
-            }
-        }
-    }
-
-    if (top_address) {
-        return { top_address, memory_size };
-    }
-    return { -1, -1 };
-}
-
-uint32_t allocate_memory_block(uint32_t size, const std::string& name = "") {
-    auto [address, memory_size] = more_memory(size);
-
-    return 0x0;
-}
-
-void free_memory(uint32_t addr) {
-
-}
+    hle::kernel()->unlock_core_svc();
 }
 
 int main(int argc, char *argv[]) {
+#if 0
     hle::Kernel *kernel = new hle::Kernel;
 
-    hle::Thread *thread = kernel->create_kernel_object<hle::Thread>();
+    hle::set_kernel(kernel);
 
-    hle::allocate_memory_block(0x20, "stack_for_thread");
-
-    delete kernel;
-#if 0
-    std::string game_path = "../games/";
-    game_path += "GTASA/eboot.bin";
+    std::string game_path;
 
     game_path = "../res/samples/hello_world/hello_world.self";
     FILE *f = fopen(game_path.c_str(), "rb");
@@ -223,17 +215,17 @@ int main(int argc, char *argv[]) {
 
     std::shared_ptr<loader::SELFProgramData> self_data = loader::decrypt_self_data(data);
     bool state = loader::load_self_to_memory(self_data);
-
     self_data = nullptr;
+    delete[] data;
+
+
     hle::init_modules();
     hle::resolve_runtime_modules();
 
-    if (0) {
+    if (state) {
         uc_err err = uc_open(UC_ARCH_ARM, (uc_mode)UC_CPU_ARM_CORTEX_A9, &engine);
 
         if (err == UC_ERR_OK) {
-            memory::map_memory("ProgramStack1", 0x78000000, 0x80000000-1, memory::PROTECTION_TYPE_READ | memory::PROTECTION_TYPE_WRITE);
-
             auto mmap_list = memory::get_memory_map_list();
 
             for (auto& i : mmap_list) {
@@ -252,9 +244,35 @@ int main(int argc, char *argv[]) {
             uc_hook_add(engine, &hook, UC_HOOK_INTR, (void *) &handle_svc, nullptr, 1, 0);
             hooks.push_back(hook);
 
-            uint32_t value = 0x80000000;
-            uc_reg_write(engine, UC_ARM_REG_SP, &value);
-            err = uc_emu_start(engine, 0x810001b8 | 1, -1, -1, -1);
+            // https://github.com/unicorn-engine/unicorn/pull/572
+            unsigned char code[] = {
+                // Enable CP10 and CP11
+                0x50, 0x0f, 0x11, 0xee, // mrc p15, 0, r0, c1, c0, 2
+                0x0f, 0x06, 0x80, 0xe3, // orr r0, r0, 0xf00000
+                0x50, 0x0f, 0x01, 0xee, // mcr p15, 0, r0, c1, c0, 2
+
+                // IMB
+                // 0x00, 0x00, 0xf0, 0xef, // IMB (SWI 0xf00000)
+
+                // Enable VFP in FPEXC
+                0x40, 0x04, 0xa0, 0xe3, // mov r0, 0x40000000
+                0x10, 0x0a, 0xe8, 0xee, // vmsr fpexc, r0
+
+                0x1e, 0xff, 0x2f, 0xe1
+            };
+
+            uint32_t arbitrary_code_heap = hle::allocate_heap(sizeof code, "arbitrary_code_execution");
+
+            std::memcpy(memory::get_pointer(arbitrary_code_heap), code, sizeof code);
+            memory::change_protection(arbitrary_code_heap, arbitrary_code_heap + 0xFFF, memory::PROTECTION_TYPE_EXECUTE | memory::PROTECTION_TYPE_READ | memory::PROTECTION_TYPE_WRITE);
+
+            uc_err err = uc_emu_start(engine, arbitrary_code_heap, -1, -1, -1);
+            printf("%s\n", uc_strerror(err));
+
+            int thid = kernel->create_thread("entry_thread", 0x810001b8 | 1, 32, 0x2000, 0x0, 0x0);
+            kernel->start_thread(thid, 0, 0);
+
+            kernel->run_single_thread_with_events();
 
             for (auto& i : hooks) {
                 uc_hook_del(engine, i);
@@ -262,12 +280,45 @@ int main(int argc, char *argv[]) {
 
             hooks.clear();
             uc_close(engine);
+#if 0
+            SDL_Init(SDL_INIT_VIDEO);
+            SDL_Window *window = SDL_CreateWindow("PSVita emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, framebuffer.framebuffer_width, framebuffer.framebuffer_height, SDL_WINDOW_OPENGL);
+            SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+            SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STREAMING, framebuffer.framebuffer_width, framebuffer.framebuffer_height);
+
+            void *pixels;
+            int pitch;
+
+            SDL_LockTexture(texture, nullptr, &pixels, &pitch);
+            std::memcpy(pixels, memory::get_pointer_unchecked(framebuffer.framebuffer_base), framebuffer.framebuffer_width * framebuffer.framebuffer_height * 4);
+
+            SDL_UnlockTexture(texture);
+
+            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+
+            bool quit = false;
+            while (!quit) {
+                SDL_Event ev;
+                while (SDL_PollEvent(&ev)) {
+                    if (ev.type == SDL_QUIT)
+                        quit = true;
+                }
+
+                SDL_RenderPresent(renderer);
+                SDL_Delay(16);
+            }
+
+            SDL_DestroyTexture(texture);
+            SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+#endif
         } else {
             printf("Can't load unicorn\n");
         }
     } else
         printf("Can't load memory\n");
-    delete[] data;
+
+    delete kernel;
 #endif
     return 0;
 }

@@ -10,6 +10,7 @@
 #define LOG_ERROR(logger, ...) logger.log_error(__FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define LOG_INFO(logger, ...) logger.log_info(__FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define LOG_WARN(logger, ...) logger.log_warn(__FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
+#define LOG_HLE(logger, ...) logger.log_hle(__FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 
 struct Logger {
 private:
@@ -25,6 +26,7 @@ public:
     void log_warn(const char *filename, const char *function, int line, const char *fmt, ...);
     void log_error(const char *filename, const char *function, int line, const char *fmt, ...);
     void log_debug(const char *filename, const char *function, int line, const char *fmt, ...);
+    void log_hle(const char *filename, const char *function, int line, const char *fmt, ...);
 };
 
 extern Logger SELFLOADER, HLE, MEMORY, KERNEL;

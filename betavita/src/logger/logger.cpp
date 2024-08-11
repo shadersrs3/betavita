@@ -45,3 +45,10 @@ void Logger::log_debug(const char *filename, const char *function, int line, con
     normal_print(filename, function, line, "DEBUG", fmt, ap);
     va_end(ap);
 }
+
+void Logger::log_hle(const char *filename, const char *function, int line, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    normal_print(filename, function, line, "HLE", fmt, ap);
+    va_end(ap);
+}

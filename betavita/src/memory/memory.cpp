@@ -29,8 +29,8 @@ void map_memory(const std::string& name, uint32_t start, uint32_t end, uint8_t p
 
     std::sort(memory_map_list.begin(), memory_map_list.end(), [](const MemoryMap &a, const MemoryMap& b) { return a.end < b.end; });
 
-    map_memory_from_api(start, end, map.fast_access, map.protection);
     LOG_INFO(MEMORY, "Mapped memory %s 0x%08X ... 0x%08X size 0x%08X protection flags 0x%01x", name.c_str(), map.start, map.end, map.size, protection);
+    map_memory_from_api(start, end, map.fast_access, map.protection);
 }
 
 void unmap_memory(uint32_t start, uint32_t end) {
@@ -44,6 +44,16 @@ void unmap_memory_all() {
 
     memory_map_list.clear();
     LOG_INFO(MEMORY, "Unmapped all memory regions");
+}
+
+void change_protection(uint32_t start, uint32_t end, uint8_t protection) {
+    for (auto& i : memory_map_list) {
+        if ((start >= i.start && start <= i.end) && (end >= i.start && end <= i.end)) {
+            i.protection = (ProtectionType) protection;
+        }
+    }
+
+    change_protection_from_api(start, end, protection);
 }
 
 std::vector<MemoryMap>& get_memory_map_list() {
@@ -66,6 +76,14 @@ void *get_pointer(uint32_t address) {
         LOG_ERROR(MEMORY, "Unmapped accessed address 0x%08x\n", address);
     }
     return data;
+}
+
+bool is_valid_address_range(uint32_t start, uint32_t end) {
+    for (auto& i : memory_map_list) {
+        if (start >= i.start && end < i.end)
+            return true;
+    }
+    return false;
 }
 
 void memcpy(uint32_t dst, uint32_t src, uint32_t size) {

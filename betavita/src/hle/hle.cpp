@@ -2,6 +2,7 @@
 
 #include <hle/hle.h>
 
+#include <hle/modules/SceDisplayUser.h>
 #include <hle/modules/SceLibKernel.h>
 #include <hle/modules/SceSysmem.h>
 
@@ -82,5 +83,9 @@ void init_modules() {
     module_list.push_back(get_module_SceLibKernel());
 
     // Kernel modules
+
+    // SceDisplayUser modules
+
+    module_list.push_back(get_module_SceDisplayUser());
 }
 }

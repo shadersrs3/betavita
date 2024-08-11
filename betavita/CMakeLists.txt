@@ -15,9 +15,12 @@ set(SOURCE_FILES
     src/main.cpp
 
     src/hle/hle.cpp
+    src/hle/memory_manager.cpp
     src/hle/kernel.cpp
+    src/hle/display.cpp
     src/hle/modules/SceLibKernel.cpp
     src/hle/modules/SceSysmem.cpp
+    src/hle/modules/SceDisplayUser.cpp
 )
 
 set(HEADER_FILES
@@ -27,9 +30,12 @@ set(HEADER_FILES
     include/logger/logger.h
 
     include/hle/hle.h
+    include/hle/memory_manager.h
     include/hle/kernel.h
+    include/hle/display.h
     include/hle/modules/SceLibKernel.h
     include/hle/modules/SceSysmem.h
+    include/hle/modules/SceDisplayUser.h
 )
 
 set(HEADER_DIRECTORIES
@@ -44,4 +50,5 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_link_libraries(${PROJECT_NAME}
     /usr/lib/x86_64-linux-gnu/libstdc++.so.6
     /usr/lib/x86_64-linux-gnu/libz.so
+    # /usr/lib/x86_64-linux-gnu/libSDL2.so
     ${PROJECT_SOURCE_DIR}/../ext/unicorn-master/build/libunicorn.so)

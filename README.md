@@ -1,15 +1,13 @@
 # betavita
+
 betavita is PS Vita emulator written in C++
 
-![betavita logo](betavita.png)
+## Goals
+- Implement GXM and shader decoder
+- Implement audio and audio decoding
+- Add debugging tools
+- Add a UI
+- Implement a few of the known library functions
 
-
-[goals]
-
-
-excuse the paint for now
-
-requires unicorn, zlib
-
-TODO:
-change the libraries afterwards
+## Progress
+- loads a hello world to the framebuffer

@@ -4,7 +4,7 @@ betavita is PS Vita emulator written in C++
 ![betavita logo](betavita.png)
 
 
-[[goals]]
+[goals]
 
 
 excuse the paint for now

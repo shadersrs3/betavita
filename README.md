@@ -12,4 +12,4 @@ betavita is PS Vita emulator written in C++
 
 ## Progress
 - loads a hello world to the framebuffer
-- cave story loads intercepted the SDL calls
+- cave story loads intercepted the SDL calls temporarily (currently doing some work for GXM)

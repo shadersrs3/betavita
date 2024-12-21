@@ -14,3 +14,4 @@ betavita is PS Vita emulator written in C++
 ## Progress
 - loads a hello world to the framebuffer
 - cave story loads intercepted the SDL calls temporarily (currently doing some work for GXM)
+- (almost) getting Uncharted to boot to main menu just reads textures from sceIoPread function
